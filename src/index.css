@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+@theme {
+  --font-heading: "Rajdhani", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  
+  --color-coal: #07070a;
+  --color-coal-dark: #0a0a0f;
+  --color-coal-medium: #12121a;
+  --color-coal-light: #181824;
+  --color-coal-card: #1f1f2e;
+  
+  --color-purple-primary: #7c3aed;
+  --color-purple-bright: #9d4edd;
+  --color-purple-glow: #e0aaff;
+  --color-neon-cyan: #00f0ff;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-coal);
+    color: #f3f4f6;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+  
+  h1, h2, h3, h4, h5, h6, .gamer-font {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+}
+
+/* Custom Cyberpunk & Gaming Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-coal);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-purple-primary);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-purple-bright);
+}
+
+/* Glow effects */
+.glow-purple {
+  box-shadow: 0 0 15px rgba(124, 58, 237, 0.4);
+}
+.glow-purple-lg {
+  box-shadow: 0 0 30px rgba(124, 58, 237, 0.6);
+}
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+}
+.text-glow-purple {
+  text-shadow: 0 0 10px rgba(124, 58, 237, 0.6);
+}
+.text-glow-cyan {
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+/* Cyberpunk Clip Corner */
+.clip-cyber {
+  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 15px 100%, 0 calc(100% - 15px));
+}
+
+.clip-cyber-sm {
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+
+.clip-cyber-btn {
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+/* Clean Background styling */
+
+/* Custom Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.5;
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.3);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 25px rgba(124, 58, 237, 0.7);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s infinite;
+}
+
+@keyframes glitch {
+  0% {
+    text-shadow: 2px -2px 0px #ff00c1, -2px 2px 0px #00fff0;
+  }
+  25% {
+    text-shadow: -2px 2px 0px #ff00c1, 2px -2px 0px #00fff0;
+  }
+  50% {
+    text-shadow: 1px -1px 0px #ff00c1, -1px 1px 0px #00fff0;
+  }
+  75% {
+    text-shadow: -1px 1px 0px #ff00c1, 1px -1px 0px #00fff0;
+  }
+  100% {
+    text-shadow: 2px -2px 0px #ff00c1, -2px 2px 0px #00fff0;
+  }
+}
+
+.animate-glitch {
+  animation: glitch 1.5s infinite linear alternate-reverse;
+}
+
+/* Matrix/Particle dots styling */
+.particle-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
