@@ -94,7 +94,7 @@ interface ClanContextType {
   
   currentUser: SteamUser | null;
   isLoggingIn: boolean;
-  loginWithSteam: () => Promise<void>;
+  loginWithSteam: (e?: React.MouseEvent) => Promise<void>;
   logoutUser: () => Promise<void>;
 }
 
@@ -132,6 +132,7 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+  // Синхронизация сессий Администратора и обычных пользователей
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -151,8 +152,14 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
-        setCurrentUser(null);
-        setIsAdmin(false);
+        // Если из Firebase сессия ушла, но в localStorage остался Steam-юзер, восстанавливаем его
+        const localUser = localStorage.getItem('current_steam_user');
+        if (localUser) {
+          setCurrentUser(JSON.parse(localUser));
+        } else {
+          setCurrentUser(null);
+          setIsAdmin(false);
+        }
       }
     });
     return unsubAuth;
@@ -171,23 +178,45 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut(auth);
   };
 
-  // ============================================================
-  // АВТОРИЗАЦИЯ: симуляция Steam (работает и локально, и на хостинге)
-  // Реальная интеграция Steam API делается через Firebase Functions
-  // ============================================================
-  // Проверяем, вернулись ли мы со Steam при загрузке
+// Проверяем, вернулись ли мы со Steam при загрузке
   const checkSteamCallback = async () => {
     const params = new URLSearchParams(window.location.search);
+    
+    // Если вернулся флаг успеха от Netlify функции
     if (params.get('steam_auth') === 'success') {
-      const storedData = sessionStorage.getItem('steam_auth_data');
+      // Ищем данные в localStorage по обоим возможным ключам
+      const storedData = localStorage.getItem('user') || localStorage.getItem('current_steam_user');
+      
       if (storedData) {
         try {
           const userPayload = JSON.parse(storedData);
           setCurrentUser(userPayload);
-          sessionStorage.removeItem('steam_auth_data');
+          
+          // Жестко фиксируем в правильный ключ, который ожидает этот контекст
+          localStorage.setItem('current_steam_user', JSON.stringify(userPayload));
+          
+          // Подчищаем старый ключ, чтобы не захламлять память
+          localStorage.removeItem('user');
+          
+          // Красиво убираем из адресной строки ?steam_auth=success
           window.history.replaceState({}, document.title, window.location.pathname);
         } catch (e) {
           console.error('Failed to parse steam auth data', e);
+        }
+      }
+    } else {
+      // На случай если мы просто зашли на сайт на следующий день — проверяем сохраненную сессию
+      const savedUser = localStorage.getItem('current_steam_user') || localStorage.getItem('user');
+      if (savedUser && !currentUser) {
+        try {
+          const parsed = JSON.parse(savedUser);
+          setCurrentUser(parsed);
+          if (localStorage.getItem('user')) {
+            localStorage.setItem('current_steam_user', savedUser);
+            localStorage.removeItem('user');
+          }
+        } catch (e) {
+          console.error(e);
         }
       }
     }
@@ -198,35 +227,32 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkSteamCallback();
   }, []);
 
-  const loginWithSteam = async () => {
+  // Кнопка авторизации Steam (Редирект на функцию Netlify)
+  const loginWithSteam = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    
     if (isLoggingIn) return;
     setIsLoggingIn(true);
 
     try {
-      // Определяем URL Firebase Function
-      const projectId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 
-                         window.location.hostname === 'localhost' ? 
-                         'your-project' : 
-                         window.location.hostname.split('.')[0];
-      
-      const functionUrl = isLocalhost() 
-        ? 'http://localhost:5001/' + projectId + '/us-central1/steamAuth'
-        : 'https://' + window.location.hostname.replace('.web.app', '') + '.web.app/steamAuth';
-
-      // Редирект на Firebase Function, которая обработает Steam OpenID
-      window.location.assign(functionUrl);
+      const targetUrl = `${window.location.origin}/.netlify/functions/steamAuth`;
+      window.location.href = targetUrl;
     } catch (error) {
-      console.error('Steam auth error:', error);
+      console.error("Ошибка при перенаправлении в Steam:", error);
       setIsLoggingIn(false);
     }
   };
 
   const logoutUser = async () => {
     setCurrentUser(null);
+    localStorage.removeItem('current_steam_user');
     await signOut(auth);
   };
 
-  // CRUD
+  // CRUD для Участников клана
   const addMember = async (newMember: Omit<Member, 'id' | 'joinedDate'>) => {
     await addDoc(collection(db, 'members'), {
       ...newMember,
@@ -242,6 +268,7 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await deleteDoc(doc(db, 'members', id));
   };
 
+  // CRUD для Ивентов
   const addEvent = async (event: Omit<ClanEvent, 'id'>) => {
     await addDoc(collection(db, 'events'), event);
   };
@@ -250,6 +277,7 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await deleteDoc(doc(db, 'events', id));
   };
 
+  // CRUD для Новостей
   const addNews = async (post: Omit<NewsPost, 'id' | 'date' | 'likes'>) => {
     await addDoc(collection(db, 'news'), {
       ...post,
