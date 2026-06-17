@@ -168,6 +168,7 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Синхронизация сессий Администратора и обычных пользователей
+ // Синхронизация сессий Администратора и обычных пользователей
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -187,16 +188,17 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
-        // Если из Firebase сессия пуста, но у нас есть синхронно определенный currentUser — не затираем его
+        // Если из Firebase сессия пуста — мы проверяем, нет ли у нас В СТЕЙТЕ уже живого Steam-юзера
+        // Если в localStorage или стейте пусто, тогда и только тогда сбрасываем всё в null
         const savedUser = localStorage.getItem('current_steam_user');
-        if (!savedUser) {
+        if (!savedUser && !currentUser) {
           setCurrentUser(null);
           setIsAdmin(false);
         }
       }
     });
     return unsubAuth;
-  }, []);
+  }, [currentUser]); // Добавили currentUser в зависимости, чтобы хук знал о его существовании
 
   const loginAdmin = async (password: string): Promise<boolean> => {
     if (password === 'vortex2026') {
