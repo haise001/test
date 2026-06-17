@@ -104,8 +104,7 @@ export const handler = async (event) => {
     `openid.claimed_id=http://specs.openid.net/auth/2.0/identifier_select`;
 
   return {
-    statusCode: 302,
-    headers: { 'Location': steamUrl },
-    body: ''
-  };
+  statusCode: 302,
+  headers: { 'Location': `${protocol}://${host}/?auth_success_id=${userId}` },
+  body: ''
 };
