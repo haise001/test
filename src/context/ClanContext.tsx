@@ -175,18 +175,31 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut(auth);
   };
 
-  // Проверяем, вернулись ли мы со Steam при загрузке
+// Проверяем, вернулись ли мы со Steam при загрузке
   const checkSteamCallback = async () => {
     const params = new URLSearchParams(window.location.search);
     const authStatus = params.get('steam_auth');
     const base64Data = params.get('data');
     
+    // ВЫВОДИМ В ТЕКСТ КОНСОЛИ ВСЁ, ЧТО ПРИЛЕТЕЛО
+    console.log("=== ОТЛАДКА СТИМА ===");
+    console.log("URL текущей страницы:", window.location.href);
+    console.log("Параметр steam_auth:", authStatus);
+    console.log("Параметр data (есть или нет):", base64Data ? "ДА, ЕСТЬ СТРОКА" : "НЕТУ");
+    console.log("=====================");
+
     if (authStatus === 'success' && base64Data) {
       try {
-        const decodedJson = atob(base64Data);
-        const userPayload = JSON.parse(decodedJson);
+        const decodedJson = decodeURIComponent(
+          atob(base64Data.replace(/-/g, '+').replace(/_/g, '/'))
+            .split('')
+            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
         
-        setCurrentUser(userPayload);
+        console.log("◈ УСПЕШНО РАСПАРСИЛИ ЮЗЕРА:", JSON.parse(decodedJson));
+        
+        setCurrentUser(JSON.parse(decodedJson));
         localStorage.setItem('current_steam_user', decodedJson);
         
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -195,6 +208,16 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.error('Ошибка декодирования данных Steam Auth:', e);
       }
     }
+
+    const savedUser = localStorage.getItem('current_steam_user');
+    if (savedUser && !currentUser) {
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
 
     const savedUser = localStorage.getItem('current_steam_user');
     if (savedUser && !currentUser) {
