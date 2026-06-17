@@ -2,7 +2,7 @@ const admin = require('firebase-admin');
 const path = require('path');
 const fs = require('fs');
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   // 1. Инициализируем Firebase прямо здесь с жестким отловом ошибок
   if (admin.apps.length === 0) {
     try {
@@ -60,7 +60,7 @@ exports.handler = async (event) => {
   if (!STEAM_API_KEY) {
     return { 
       statusCode: 500, 
-      body: 'Steam API key missing. Добавьте STEAM_API_KEY в файл .env' 
+      body: 'Steam API key missing. Добавьте STEAM_API_KEY в переменные Netlify' 
     };
   }
 
@@ -112,16 +112,37 @@ exports.handler = async (event) => {
             });
           }
 
+          // Заменяем сломанный getRedirectPage на чистый скрипт редиректа
           return {
             statusCode: 200,
             headers: { 'Content-Type': 'text/html; charset=utf-8' },
-            body: getRedirectPage({
-              uid: userId,
-              displayName: player.personaname,
-              photoURL: player.avatarfull,
-              squadHours,
-              steamId
-            })
+            body: `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>Авторизация успешна</title>
+                <script>
+                  // Сохраняем данные пользователя во внутреннее хранилище браузера
+                  const user = {
+                    uid: "${userId}",
+                    displayName: "${player.personaname.replace(/"/g, '\\"')}",
+                    photoURL: "${player.avatarfull}",
+                    squadHours: ${squadHours},
+                    steamId: "${steamId}"
+                  };
+                  localStorage.setItem('user', JSON.stringify(user));
+                  
+                  // Мягко редиректим на главную страницу сайта
+                  window.location.href = '/?steam_auth=success';
+                </script>
+              </head>
+              <body>
+                <p style="text-align:center; font-family:sans-serif; margin-top:50px;">
+                  Авторизация прошла успешно! Перенаправляем на сайт...
+                </p>
+              </body>
+              </html>
+            `
           };
         }
       } catch (error) {
@@ -131,8 +152,6 @@ exports.handler = async (event) => {
     }
   }
 
-// Используем localhost, но без порта 8888 (Akamai не любит нестандартные порты бэкенда)
-// Код сам поймет, запущен он на localhost или в облаке Netlify
   const protocol = host.includes('localhost') ? 'http' : 'https';
   const returnUrl = `${protocol}://${host}/.netlify/functions/steamAuth`;
   const realmUrl = `${protocol}://${host}`;
