@@ -94,13 +94,54 @@ interface ClanContextType {
 
 const ClanContext = createContext<ClanContextType | undefined>(undefined);
 
+// ВЫНОСИМ ПРОВЕРКУ URL НА САМЫЙ ВЕРХ, ДО СТАРТА REACT
+const getInitialUser = (): SteamUser | null => {
+  if (typeof window === 'undefined') return null;
+  
+  const params = new URLSearchParams(window.location.search);
+  const authStatus = params.get('steam_auth');
+  const base64Data = params.get('data');
+  
+  if (authStatus === 'success' && base64Data) {
+    try {
+      const decodedJson = decodeURIComponent(
+        atob(base64Data.replace(/-/g, '+').replace(/_/g, '/'))
+          .split('')
+          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const userPayload = JSON.parse(decodedJson);
+      
+      localStorage.setItem('current_steam_user', decodedJson);
+      // Чистим URL сразу
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return userPayload;
+    } catch (e) {
+      console.error('Ошибка синхронного парсинга URL:', e);
+    }
+  }
+  
+  // Если в URL ничего нет, берём старую сессию
+  const savedUser = localStorage.getItem('current_steam_user');
+  if (savedUser) {
+    try {
+      return JSON.parse(savedUser);
+    } catch (e) {
+      localStorage.removeItem('current_steam_user');
+    }
+  }
+  return null;
+};
+
 export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [events, setEvents] = useState<ClanEvent[]>([]);
   const [news, setNews] = useState<NewsPost[]>([]);
   const [stats, setStats] = useState<StatPoint[]>([]);
-  const [currentUser, setCurrentUser] = useState<SteamUser | null>(null);
+  
+  // Инициализируем стейт сразу готовым юзером!
+  const [currentUser, setCurrentUser] = useState<SteamUser | null>(() => getInitialUser());
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
@@ -146,14 +187,9 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
+        // Если из Firebase сессия пуста, но у нас есть синхронно определенный currentUser — не затираем его
         const savedUser = localStorage.getItem('current_steam_user');
-        if (savedUser) {
-          try {
-            setCurrentUser(JSON.parse(savedUser));
-          } catch (e) {
-            setCurrentUser(null);
-          }
-        } else {
+        if (!savedUser) {
           setCurrentUser(null);
           setIsAdmin(false);
         }
@@ -174,65 +210,6 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAdmin(false);
     signOut(auth);
   };
-
-// Проверяем, вернулись ли мы со Steam при загрузке
-  const checkSteamCallback = async () => {
-    const params = new URLSearchParams(window.location.search);
-    const authStatus = params.get('steam_auth');
-    const base64Data = params.get('data');
-    
-    // ВЫВОДИМ В ТЕКСТ КОНСОЛИ ВСЁ, ЧТО ПРИЛЕТЕЛО
-    console.log("=== ОТЛАДКА СТИМА ===");
-    console.log("URL текущей страницы:", window.location.href);
-    console.log("Параметр steam_auth:", authStatus);
-    console.log("Параметр data (есть или нет):", base64Data ? "ДА, ЕСТЬ СТРОКА" : "НЕТУ");
-    console.log("=====================");
-
-    if (authStatus === 'success' && base64Data) {
-      try {
-        const decodedJson = decodeURIComponent(
-          atob(base64Data.replace(/-/g, '+').replace(/_/g, '/'))
-            .split('')
-            .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
-        );
-        
-        console.log("◈ УСПЕШНО РАСПАРСИЛИ ЮЗЕРА:", JSON.parse(decodedJson));
-        
-        setCurrentUser(JSON.parse(decodedJson));
-        localStorage.setItem('current_steam_user', decodedJson);
-        
-        window.history.replaceState({}, document.title, window.location.pathname);
-        return;
-      } catch (e) {
-        console.error('Ошибка декодирования данных Steam Auth:', e);
-      }
-    }
-
-    const savedUser = localStorage.getItem('current_steam_user');
-    if (savedUser && !currentUser) {
-      try {
-        setCurrentUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  };
-
-    const savedUser = localStorage.getItem('current_steam_user');
-    if (savedUser && !currentUser) {
-      try {
-        setCurrentUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  };
-
-  // Запускаем проверку при загрузке
-  useEffect(() => {
-    checkSteamCallback();
-  }, []);
 
   // Кнопка авторизации Steam
   const loginWithSteam = async (e?: React.MouseEvent) => {
@@ -311,16 +288,3 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addMember, updateMember, deleteMember,
       addEvent, deleteEvent,
       addNews, deleteNews, likeNews,
-      isAdmin, loginAdmin, logoutAdmin,
-      currentUser, isLoggingIn, loginWithSteam, logoutUser
-    }}>
-      {children}
-    </ClanContext.Provider>
-  );
-};
-
-export const useClan = () => {
-  const context = useContext(ClanContext);
-  if (!context) throw new Error('useClan must be used within a ClanProvider');
-  return context;
-};
