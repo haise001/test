@@ -1,20 +1,11 @@
 import React, { useState } from 'react';
 import { useClan } from '../context/ClanContext';
-import { 
-  Users, Trophy, Calendar, Newspaper, TrendingUp, Home, User,
-  ShieldCheck, ShieldAlert, Menu, X
-} from 'lucide-react';
+import { Users, Trophy, Calendar, Newspaper, TrendingUp, Home, User, ShieldCheck, ShieldAlert, Menu, X } from 'lucide-react';
 
-interface NavbarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-}
+interface NavbarProps { activeTab: string; setActiveTab: (tab: string) => void; }
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
-  const { 
-    isAdmin, 
-    currentUser, loginWithSteam, logoutUser, isLoggingIn 
-  } = useClan();
+  const { isAdmin, currentUser, loginWithSteam, logoutUser } = useClan();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const menuItems = [
@@ -77,11 +68,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             {currentUser ? (
               <div className="flex items-center space-x-3 bg-zinc-900/50 border border-zinc-800 px-3 py-1.5 rounded-lg group">
                 <div className="text-right">
-                  <div className="text-[10px] font-bold text-white uppercase truncate max-w-[100px]">{currentUser.displayName}</div>
-                  <div className="text-[9px] text-zinc-500 font-bold mt-1">{currentUser.squadHours} ч. в Squad</div>
+                  <div className="text-[10px] font-bold text-white uppercase truncate max-w-[100px]">{currentUser.nick}</div>
+                  <div className="text-[9px] text-zinc-500 font-bold mt-1">{currentUser.hours} ч. в Squad</div>
                 </div>
                 <div className="relative cursor-pointer" onClick={() => handleTabClick('profile')}>
-                  <img src={currentUser.photoURL} className="w-8 h-8 rounded border border-zinc-700 hover:border-purple-primary transition-colors" alt="avatar" />
+                  <img src={currentUser.avatar} className="w-8 h-8 rounded border border-zinc-700 hover:border-purple-primary transition-colors" alt="avatar" />
                   <button 
                     onClick={(e) => { e.stopPropagation(); logoutUser(); handleTabClick('landing'); }} 
                     className="absolute -top-1 -right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -92,13 +83,12 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
               </div>
             ) : (
               <button
-                onClick={(e) => loginWithSteam(e)}
-                disabled={isLoggingIn}
+                onClick={loginWithSteam}
                 type="button"
                 className="flex items-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded font-bold uppercase text-xs border border-zinc-700 transition-all"
               >
                 <img src="https://upload.wikimedia.org/wikipedia/commons/8/83/Steam_icon_logo.svg" className="w-4 h-4 invert" alt="steam" />
-                <span>{isLoggingIn ? 'Вход...' : 'Войти через Steam'}</span>
+                <span>Войти через Steam</span>
               </button>
             )}
 
@@ -119,11 +109,11 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
 
           <div className="flex items-center lg:hidden space-x-3">
             {!currentUser && (
-              <button onClick={loginWithSteam} className="p-2 bg-[#1b2838] rounded border border-[#66c0f4]/30">
+              <button onClick={loginWithSteam} className="p-2 bg-zinc-800 rounded border border-zinc-700">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/8/83/Steam_icon_logo.svg" className="w-5 h-5 invert" alt="steam" />
               </button>
             )}
-            {currentUser && <img src={currentUser.photoURL} onClick={() => handleTabClick('profile')} className="w-8 h-8 rounded-full border border-purple-primary cursor-pointer" alt="avatar" />}
+            {currentUser && <img src={currentUser.avatar} onClick={() => handleTabClick('profile')} className="w-8 h-8 rounded-full border border-purple-primary cursor-pointer" alt="avatar" />}
             <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-zinc-400 hover:text-white p-2">
               {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -146,24 +136,20 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
             {currentUser ? (
               <div className="flex items-center justify-between bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
                 <div className="flex items-center space-x-3" onClick={() => handleTabClick('profile')}>
-                  <img src={currentUser.photoURL} className="w-10 h-10 rounded border border-zinc-700" alt="avatar" />
+                  <img src={currentUser.avatar} className="w-10 h-10 rounded border border-zinc-700" alt="avatar" />
                   <div>
-                    <div className="text-sm font-bold text-white uppercase">{currentUser.displayName}</div>
-                    <div className="text-xs text-zinc-500">{currentUser.squadHours} ч. в Squad</div>
+                    <div className="text-sm font-bold text-white uppercase">{currentUser.nick}</div>
+                    <div className="text-xs text-zinc-500">{currentUser.hours} ч. в Squad</div>
                   </div>
                 </div>
                 <button onClick={() => { logoutUser(); handleTabClick('landing'); }} className="text-xs text-red-500 font-bold uppercase">Выйти</button>
               </div>
             ) : (
-              <button onClick={loginWithSteam} disabled={isLoggingIn} className="flex items-center justify-center space-x-3 bg-[#1b2838] text-white py-3 rounded font-bold uppercase text-xs w-full border border-[#66c0f4]/20">
+              <button onClick={loginWithSteam} className="flex items-center justify-center space-x-3 bg-zinc-800 text-white py-3 rounded font-bold uppercase text-xs w-full border border-zinc-700">
                 <img src="https://upload.wikimedia.org/wikipedia/commons/8/83/Steam_icon_logo.svg" className="w-5 h-5 invert" alt="steam" />
-                <span>{isLoggingIn ? 'ПОДКЛЮЧЕНИЕ...' : 'ВОЙТИ ЧЕРЕЗ STEAM'}</span>
+                <span>ВОЙТИ ЧЕРЕЗ STEAM</span>
               </button>
             )}
-            <a href="https://discord.gg/BuSBWGNf" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center space-x-2 bg-purple-primary text-white py-3 rounded font-bold uppercase text-xs w-full glow-purple">
-              <DiscordIcon />
-              <span>ВСТУПИТЬ В DISCORD</span>
-            </a>
           </div>
         </div>
       )}

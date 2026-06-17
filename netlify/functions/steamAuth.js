@@ -4,10 +4,36 @@ const fs = require('fs');
 
 export const handler = async (event) => {
   if (admin.apps.length === 0) {
-    const envConfig = process.env.FIREBASE_SERVICE_ACCOUNT;
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(envConfig))
-    });
+    try {
+      const keyPositions = [
+        path.join(__dirname, 'firebase-admin-key.json'),
+        path.join(process.cwd(), 'netlify', 'functions', 'firebase-admin-key.json'),
+        path.join(process.cwd(), 'firebase-admin-key.json')
+      ];
+
+      let keyPath = null;
+      for (const pos of keyPositions) {
+        if (fs.existsSync(pos)) {
+          keyPath = pos;
+          break;
+        }
+      }
+
+      if (keyPath) {
+        const fileContent = fs.readFileSync(keyPath, 'utf8');
+        admin.initializeApp({
+          credential: admin.credential.cert(JSON.parse(fileContent))
+        });
+      } else {
+        const envConfig = process.env.FIREBASE_SERVICE_ACCOUNT;
+        if (!envConfig) throw new Error("Firebase credentials missing.");
+        admin.initializeApp({
+          credential: admin.credential.cert(JSON.parse(envConfig))
+        });
+      }
+    } catch (err) {
+      return { statusCode: 500, body: `Firebase Init Error: ${err.message}` };
+    }
   }
 
   const db = admin.firestore();
@@ -19,13 +45,11 @@ export const handler = async (event) => {
   const claimedId = query['openid.claimed_id'];
   const isValid = query['openid.op_endpoint'] === 'https://steamcommunity.com/openid/login';
 
-  // Если вернулись от Steam с успешным инфо
   if (claimedId && isValid) {
     const steamId = claimedId.split('/').pop();
 
     if (steamId) {
       try {
-        // Получаем инфо о юзере
         const userResponse = await fetch(
           `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${steamId}`
         );
@@ -33,31 +57,41 @@ export const handler = async (event) => {
         const player = userData?.response?.players?.[0];
 
         if (player) {
+          const gamesResponse = await fetch(
+            `https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${STEAM_API_KEY}&steamid=${steamId}&include_played_free_games=true&appids_filter[0]=393380`
+          );
+          const gamesData = await gamesResponse.json();
+          const squadGame = gamesData?.response?.games?.[0];
+          const squadHours = squadGame ? Math.floor(squadGame.playtime_forever / 60) : 0;
+
           const userId = 'steam_' + steamId;
 
-          // Сохраняем в Firestore
-          await db.collection('users').doc(userId).set({
+          // ПИШЕМ СРАЗУ В MEMBERS, ЧТОБЫ ИСКЛЮЧИТЬ ПУСТЫЕ КОЛЛЕКЦИИ
+          await db.collection('members').doc(userId).set({
             uid: userId,
-            displayName: player.personaname,
-            photoURL: player.avatarfull,
+            nick: player.personaname,
+            avatar: player.avatarfull, // Ссылка на аватарку высокого разрешения
+            hours: squadHours,
             steamId: steamId,
-            lastLogin: new Date().toISOString()
+            role: 'recruit',
+            rankName: 'Private',
+            status: 'online',
+            joinedDate: new Date().toISOString().split('T')[0]
           }, { merge: true });
 
-          // Редиректим на фронт, передавая ТОЛЬКО чистый steamId
           return {
             statusCode: 302,
             headers: { 'Location': `${protocol}://${host}/?auth_success_id=${userId}` },
             body: ''
           };
         }
-      } catch (err) {
-        return { statusCode: 500, body: 'Database or Steam API Error' };
+      } catch (error) {
+        console.error('Steam API error:', error);
+        return { statusCode: 500, body: 'Steam API error' };
       }
     }
   }
 
-  // Если это первый клик (отправка в Steam)
   const returnUrl = `${protocol}://${host}/.netlify/functions/steamAuth`;
   const realmUrl = `${protocol}://${host}`;
 
