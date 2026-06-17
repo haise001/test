@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db, auth } from '../firebase';
 import { 
   collection, onSnapshot, addDoc, updateDoc, 
@@ -7,12 +7,6 @@ import {
 import { 
   onAuthStateChanged, signOut
 } from 'firebase/auth';
-
-// Проверка окружения
-const isLocalhost = () => {
-  const host = window.location.hostname;
-  return host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
-};
 
 export interface Member {
   id: string;
@@ -100,24 +94,6 @@ interface ClanContextType {
 
 const ClanContext = createContext<ClanContextType | undefined>(undefined);
 
-// Ключ для хранения Steam-сессии
-const STEAM_USER_KEY = 'current_steam_user';
-
-/** Читает Steam-юзера из localStorage, нормализует ключ */
-const loadSteamUserFromStorage = (): SteamUser | null => {
-  try {
-    const raw = localStorage.getItem(STEAM_USER_KEY) || localStorage.getItem('user');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    // Нормализуем: всегда пишем в правильный ключ
-    localStorage.setItem(STEAM_USER_KEY, JSON.stringify(parsed));
-    localStorage.removeItem('user');
-    return parsed as SteamUser;
-  } catch {
-    return null;
-  }
-};
-
 export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
@@ -127,12 +103,6 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentUser, setCurrentUser] = useState<SteamUser | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-
-  /**
-   * Флаг — был ли Steam-пользователь установлен через checkSteamCallback.
-   * Используем ref, чтобы onAuthStateChanged мог его прочитать без устаревшего замыкания.
-   */
-  const steamUserSetRef = useRef(false);
 
   // Firestore Real-time Listeners
   useEffect(() => {
@@ -156,37 +126,7 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Проверяем Steam-сессию ДО подписки на Firebase Auth
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-
-    if (params.get('steam_auth') === 'success') {
-      // Вернулись со Steam — берём данные из localStorage
-      const storedData = localStorage.getItem('user') || localStorage.getItem(STEAM_USER_KEY);
-      if (storedData) {
-        try {
-          const userPayload = JSON.parse(storedData) as SteamUser;
-          setCurrentUser(userPayload);
-          steamUserSetRef.current = true;
-          localStorage.setItem(STEAM_USER_KEY, JSON.stringify(userPayload));
-          localStorage.removeItem('user');
-          // Убираем ?steam_auth=success из адресной строки
-          window.history.replaceState({}, document.title, window.location.pathname);
-        } catch (e) {
-          console.error('Failed to parse steam auth data', e);
-        }
-      }
-    } else {
-      // Обычный заход — восстанавливаем сохранённую сессию
-      const savedUser = loadSteamUserFromStorage();
-      if (savedUser) {
-        setCurrentUser(savedUser);
-        steamUserSetRef.current = true;
-      }
-    }
-  }, []);
-
-  // Синхронизация Firebase Auth (для админа и Firebase-пользователей)
+  // Синхронизация сессий Администратора и обычных пользователей
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -203,21 +143,16 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
               squadHours: data.squadHours || 0,
               steamId: data.steamId || ''
             });
-            steamUserSetRef.current = true;
           }
         }
       } else {
-        // Firebase вернул null — НЕ сбрасываем Steam-юзера!
-        // Если Steam-сессия уже установлена (через localStorage), оставляем её.
-        if (steamUserSetRef.current) {
-          // Steam-юзер уже восстановлен — ничего не делаем
-          return;
-        }
-        // Последняя попытка: вдруг localStorage обновился позже
-        const savedUser = loadSteamUserFromStorage();
+        const savedUser = localStorage.getItem('current_steam_user');
         if (savedUser) {
-          setCurrentUser(savedUser);
-          steamUserSetRef.current = true;
+          try {
+            setCurrentUser(JSON.parse(savedUser));
+          } catch (e) {
+            setCurrentUser(null);
+          }
         } else {
           setCurrentUser(null);
           setIsAdmin(false);
@@ -240,7 +175,43 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut(auth);
   };
 
-  // Кнопка авторизации Steam (Редирект на функцию Netlify)
+  // Проверяем, вернулись ли мы со Steam при загрузке
+  const checkSteamCallback = async () => {
+    const params = new URLSearchParams(window.location.search);
+    const authStatus = params.get('steam_auth');
+    const base64Data = params.get('data');
+    
+    if (authStatus === 'success' && base64Data) {
+      try {
+        const decodedJson = atob(base64Data);
+        const userPayload = JSON.parse(decodedJson);
+        
+        setCurrentUser(userPayload);
+        localStorage.setItem('current_steam_user', decodedJson);
+        
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      } catch (e) {
+        console.error('Ошибка декодирования данных Steam Auth:', e);
+      }
+    }
+
+    const savedUser = localStorage.getItem('current_steam_user');
+    if (savedUser && !currentUser) {
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  // Запускаем проверку при загрузке
+  useEffect(() => {
+    checkSteamCallback();
+  }, []);
+
+  // Кнопка авторизации Steam
   const loginWithSteam = async (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -261,9 +232,7 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logoutUser = async () => {
     setCurrentUser(null);
-    steamUserSetRef.current = false;
-    localStorage.removeItem(STEAM_USER_KEY);
-    localStorage.removeItem('user');
+    localStorage.removeItem('current_steam_user');
     await signOut(auth);
   };
 

@@ -42,7 +42,6 @@ export const handler = async (event) => {
         console.log("◈ [Firebase] Успешно подключено через Environment Variables");
       }
     } catch (err) {
-      // Возвращаем ошибку прямо на экран в браузере, чтобы мы её увидели
       return {
         statusCode: 500,
         body: `Ошибка инициализации Firebase SDK: ${err.message}. Проверьте наличие ключа.`
@@ -112,37 +111,24 @@ export const handler = async (event) => {
             });
           }
 
-          // Заменяем сломанный getRedirectPage на чистый скрипт редиректа
+          // Кодируем JSON в Base64 строку для безопасной передачи через URL
+          const base64Data = Buffer.from(JSON.stringify({
+            uid: userId,
+            displayName: player.personaname,
+            photoURL: player.avatarfull,
+            squadHours,
+            steamId
+          })).toString('base64');
+
+          const protocol = host.includes('localhost') ? 'http' : 'https';
+
+          // Делаем редирект на главный сайт с данными в URL
           return {
-            statusCode: 200,
-            headers: { 'Content-Type': 'text/html; charset=utf-8' },
-            body: `
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <title>Авторизация успешна</title>
-                <script>
-                  // Сохраняем данные пользователя во внутреннее хранилище браузера
-                  const user = {
-                    uid: "${userId}",
-                    displayName: "${player.personaname.replace(/"/g, '\\"')}",
-                    photoURL: "${player.avatarfull}",
-                    squadHours: ${squadHours},
-                    steamId: "${steamId}"
-                  };
-                  localStorage.setItem('user', JSON.stringify(user));
-                  
-                  // Мягко редиректим на главную страницу сайта
-                  window.location.href = '/?steam_auth=success';
-                </script>
-              </head>
-              <body>
-                <p style="text-align:center; font-family:sans-serif; margin-top:50px;">
-                  Авторизация прошла успешно! Перенаправляем на сайт...
-                </p>
-              </body>
-              </html>
-            `
+            statusCode: 302,
+            headers: { 
+              'Location': `${protocol}://${host}/?steam_auth=success&data=${base64Data}` 
+            },
+            body: ''
           };
         }
       } catch (error) {
