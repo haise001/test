@@ -3,10 +3,8 @@ const path = require('path');
 const fs = require('fs');
 
 export const handler = async (event) => {
-  // 1. Инициализируем Firebase прямо здесь с жестким отловом ошибок
   if (admin.apps.length === 0) {
     try {
-      // Ищем ключ в корне проекта и в папке функции для надежности
       const keyPositions = [
         path.join(__dirname, 'firebase-admin-key.json'),
         path.join(process.cwd(), 'netlify', 'functions', 'firebase-admin-key.json'),
@@ -28,39 +26,33 @@ export const handler = async (event) => {
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount)
         });
-        console.log("◈ [Firebase] Успешно подключено через найденный файл:", keyPath);
+        console.log("◈ [Firebase] Connected via file:", keyPath);
       } else {
-        // Если файла нет, пробуем прочитать переменную окружения
         const envConfig = process.env.FIREBASE_SERVICE_ACCOUNT;
         if (!envConfig) {
-          throw new Error("Файл 'firebase-admin-key.json' не найден, и переменная FIREBASE_SERVICE_ACCOUNT пуста.");
+          throw new Error("Credentials missing.");
         }
         
         admin.initializeApp({
           credential: admin.credential.cert(JSON.parse(envConfig))
         });
-        console.log("◈ [Firebase] Успешно подключено через Environment Variables");
+        console.log("◈ [Firebase] Connected via Env Variables");
       }
     } catch (err) {
       return {
         statusCode: 500,
-        body: `Ошибка инициализации Firebase SDK: ${err.message}. Проверьте наличие ключа.`
+        body: `Firebase SDK Init Error: ${err.message}`
       };
     }
   }
 
-  // 2. Подключаем базу данных, теперь это безопасно
   const db = admin.firestore();
-
   const STEAM_API_KEY = process.env.STEAM_API_KEY;
   const host = event.headers['host'] || 'localhost:8888';
   const query = event.queryStringParameters || {};
 
   if (!STEAM_API_KEY) {
-    return { 
-      statusCode: 500, 
-      body: 'Steam API key missing. Добавьте STEAM_API_KEY в переменные Netlify' 
-    };
+    return { statusCode: 500, body: 'Steam API key missing.' };
   }
 
   const claimedId = query['openid.claimed_id'];
@@ -111,7 +103,6 @@ export const handler = async (event) => {
             });
           }
 
-          // Кодируем JSON в Base64 строку для безопасной передачи через URL
           const base64Data = Buffer.from(JSON.stringify({
             uid: userId,
             displayName: player.personaname,
@@ -122,7 +113,6 @@ export const handler = async (event) => {
 
           const protocol = host.includes('localhost') ? 'http' : 'https';
 
-          // Делаем редирект на главный сайт с данными в URL
           return {
             statusCode: 302,
             headers: { 

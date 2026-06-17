@@ -90,11 +90,11 @@ interface ClanContextType {
   isLoggingIn: boolean;
   loginWithSteam: (e?: React.MouseEvent) => Promise<void>;
   logoutUser: () => Promise<void>;
+  onAuthSuccess?: () => void; 
 }
 
 const ClanContext = createContext<ClanContextType | undefined>(undefined);
 
-// ВЫНОСИМ ПРОВЕРКУ URL НА САМЫЙ ВЕРХ, ДО СТАРТА REACT
 const getInitialUser = (): SteamUser | null => {
   if (typeof window === 'undefined') return null;
   
@@ -111,17 +111,13 @@ const getInitialUser = (): SteamUser | null => {
           .join('')
       );
       const userPayload = JSON.parse(decodedJson);
-      
       localStorage.setItem('current_steam_user', decodedJson);
-      // Чистим URL сразу
-      window.history.replaceState({}, document.title, window.location.pathname);
       return userPayload;
     } catch (e) {
-      console.error('Ошибка синхронного парсинга URL:', e);
+      console.error('Ошибка парсинга URL:', e);
     }
   }
   
-  // Если в URL ничего нет, берём старую сессию
   const savedUser = localStorage.getItem('current_steam_user');
   if (savedUser) {
     try {
@@ -133,19 +129,28 @@ const getInitialUser = (): SteamUser | null => {
   return null;
 };
 
-export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ClanProvider: React.FC<{ children: React.ReactNode, onAuthSuccess?: () => void }> = ({ children, onAuthSuccess }) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [events, setEvents] = useState<ClanEvent[]>([]);
   const [news, setNews] = useState<NewsPost[]>([]);
   const [stats, setStats] = useState<StatPoint[]>([]);
   
-  // Инициализируем стейт сразу готовым юзером!
   const [currentUser, setCurrentUser] = useState<SteamUser | null>(() => getInitialUser());
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Firestore Real-time Listeners
+  // Очистка URL после успешной синхронизации стейта
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('steam_auth') === 'success') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      if (onAuthSuccess) {
+        onAuthSuccess();
+      }
+    }
+  }, [onAuthSuccess]);
+
   useEffect(() => {
     const unsubMembers = onSnapshot(collection(db, 'members'), (snapshot) => {
       setMembers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Member)));
@@ -167,8 +172,6 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // Синхронизация сессий Администратора и обычных пользователей
- // Синхронизация сессий Администратора и обычных пользователей
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -188,8 +191,6 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
-        // Если из Firebase сессия пуста — мы проверяем, нет ли у нас В СТЕЙТЕ уже живого Steam-юзера
-        // Если в localStorage или стейте пусто, тогда и только тогда сбрасываем всё в null
         const savedUser = localStorage.getItem('current_steam_user');
         if (!savedUser && !currentUser) {
           setCurrentUser(null);
@@ -198,7 +199,7 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
     return unsubAuth;
-  }, [currentUser]); // Добавили currentUser в зависимости, чтобы хук знал о его существовании
+  }, [currentUser]);
 
   const loginAdmin = async (password: string): Promise<boolean> => {
     if (password === 'vortex2026') {
@@ -213,21 +214,17 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut(auth);
   };
 
-  // Кнопка авторизации Steam
   const loginWithSteam = async (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    
     if (isLoggingIn) return;
     setIsLoggingIn(true);
-
     try {
-      const targetUrl = `${window.location.origin}/.netlify/functions/steamAuth`;
-      window.location.href = targetUrl;
+      window.location.href = `${window.location.origin}/.netlify/functions/steamAuth`;
     } catch (error) {
-      console.error("Ошибка при перенаправлении в Steam:", error);
+      console.error("Steam redirect error:", error);
       setIsLoggingIn(false);
     }
   };
@@ -238,44 +235,27 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await signOut(auth);
   };
 
-  // CRUD для Участников клана
   const addMember = async (newMember: Omit<Member, 'id' | 'joinedDate'>) => {
-    await addDoc(collection(db, 'members'), {
-      ...newMember,
-      joinedDate: new Date().toISOString().split('T')[0]
-    });
+    await addDoc(collection(db, 'members'), { ...newMember, joinedDate: new Date().toISOString().split('T')[0] });
   };
-
   const updateMember = async (id: string, fields: Partial<Member>) => {
     await updateDoc(doc(db, 'members', id), fields);
   };
-
   const deleteMember = async (id: string) => {
     await deleteDoc(doc(db, 'members', id));
   };
-
-  // CRUD для Ивентов
   const addEvent = async (event: Omit<ClanEvent, 'id'>) => {
     await addDoc(collection(db, 'events'), event);
   };
-
   const deleteEvent = async (id: string) => {
     await deleteDoc(doc(db, 'events', id));
   };
-
-  // CRUD для Новостей
   const addNews = async (post: Omit<NewsPost, 'id' | 'date' | 'likes'>) => {
-    await addDoc(collection(db, 'news'), {
-      ...post,
-      date: new Date().toISOString().split('T')[0],
-      likes: 0
-    });
+    await addDoc(collection(db, 'news'), { ...post, date: new Date().toISOString().split('T')[0], likes: 0 });
   };
-
   const deleteNews = async (id: string) => {
     await deleteDoc(doc(db, 'news', id));
   };
-
   const likeNews = async (id: string) => {
     const postRef = doc(db, 'news', id);
     const postSnap = await getDoc(postRef);
@@ -290,3 +270,16 @@ export const ClanProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addMember, updateMember, deleteMember,
       addEvent, deleteEvent,
       addNews, deleteNews, likeNews,
+      isAdmin, loginAdmin, logoutAdmin,
+      currentUser, isLoggingIn, loginWithSteam, logoutUser
+    }}>
+      {children}
+    </ClanContext.Provider>
+  );
+};
+
+export const useClan = () => {
+  const context = useContext(ClanContext);
+  if (!context) throw new Error('useClan must be used within a ClanProvider');
+  return context;
+};

@@ -26,7 +26,6 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
     { id: 'stats', label: 'Статистика', icon: TrendingUp },
   ];
 
-  // Добавляем пункт "Профиль" если пользователь авторизован
   if (currentUser) {
     menuItems.push({ id: 'profile', label: 'Кабинет', icon: User });
   }
@@ -81,15 +80,22 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                   <div className="text-[10px] font-bold text-white uppercase truncate max-w-[100px]">{currentUser.displayName}</div>
                   <div className="text-[9px] text-zinc-500 font-bold mt-1">{currentUser.squadHours} ч. в Squad</div>
                 </div>
-                <div className="relative">
-                  <img src={currentUser.photoURL} className="w-8 h-8 rounded border border-zinc-700" alt="avatar" />
-                  <button onClick={logoutUser} className="absolute -top-1 -right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-2 h-2" /></button>
+                <div className="relative cursor-pointer" onClick={() => handleTabClick('profile')}>
+                  <img src={currentUser.photoURL} className="w-8 h-8 rounded border border-zinc-700 hover:border-purple-primary transition-colors" alt="avatar" />
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); logoutUser(); handleTabClick('landing'); }} 
+                    className="absolute -top-1 -right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-2 h-2" />
+                  </button>
                 </div>
               </div>
             ) : (
               <button
-                onClick={loginWithSteam} disabled={isLoggingIn}
-                className="flex items-center space-x-2 bg-[#1b2838] hover:bg-[#2a475e] text-white px-4 py-2 rounded-md text-[10px] font-bold uppercase tracking-widest transition-all border border-[#66c0f4]/20"
+                onClick={(e) => loginWithSteam(e)}
+                disabled={isLoggingIn}
+                type="button"
+                className="flex items-center space-x-2 bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded font-bold uppercase text-xs border border-zinc-700 transition-all"
               >
                 <img src="https://upload.wikimedia.org/wikipedia/commons/8/83/Steam_icon_logo.svg" className="w-4 h-4 invert" alt="steam" />
                 <span>{isLoggingIn ? 'Вход...' : 'Войти через Steam'}</span>
@@ -117,7 +123,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 <img src="https://upload.wikimedia.org/wikipedia/commons/8/83/Steam_icon_logo.svg" className="w-5 h-5 invert" alt="steam" />
               </button>
             )}
-            {currentUser && <img src={currentUser.photoURL} className="w-8 h-8 rounded-full border border-purple-primary" alt="avatar" />}
+            {currentUser && <img src={currentUser.photoURL} onClick={() => handleTabClick('profile')} className="w-8 h-8 rounded-full border border-purple-primary cursor-pointer" alt="avatar" />}
             <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-zinc-400 hover:text-white p-2">
               {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -139,14 +145,14 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
           <div className="pt-4 border-t border-zinc-800/60 px-4 space-y-3">
             {currentUser ? (
               <div className="flex items-center justify-between bg-zinc-900/50 p-3 rounded-lg border border-zinc-800">
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3" onClick={() => handleTabClick('profile')}>
                   <img src={currentUser.photoURL} className="w-10 h-10 rounded border border-zinc-700" alt="avatar" />
                   <div>
                     <div className="text-sm font-bold text-white uppercase">{currentUser.displayName}</div>
                     <div className="text-xs text-zinc-500">{currentUser.squadHours} ч. в Squad</div>
                   </div>
                 </div>
-                <button onClick={logoutUser} className="text-xs text-red-500 font-bold uppercase">Выйти</button>
+                <button onClick={() => { logoutUser(); handleTabClick('landing'); }} className="text-xs text-red-500 font-bold uppercase">Выйти</button>
               </div>
             ) : (
               <button onClick={loginWithSteam} disabled={isLoggingIn} className="flex items-center justify-center space-x-3 bg-[#1b2838] text-white py-3 rounded font-bold uppercase text-xs w-full border border-[#66c0f4]/20">
